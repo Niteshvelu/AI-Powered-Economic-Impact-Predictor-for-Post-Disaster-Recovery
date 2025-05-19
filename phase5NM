@@ -1,0 +1,92 @@
+# Install dependencies:
+# pip install fastapi uvicorn pandas scikit-learn
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+
+app = FastAPI()
+
+# Step 1: Generate synthetic training data (in-memory)
+def generate_synthetic_data():
+    data_size = 1000
+    regions = ['Coastal', 'Mountain', 'Urban', 'Rural']
+    disasters = ['Flood', 'Earthquake', 'Cyclone', 'Drought']
+
+    dataset = pd.DataFrame({
+        'region': np.random.choice(regions, data_size),
+        'disaster_type': np.random.choice(disasters, data_size),
+        'severity_index': np.random.randint(1, 10, data_size),
+        'population_affected': np.random.randint(1000, 100000, data_size),
+        'infrastructure_damage': np.random.uniform(0, 5.0, data_size),
+        'economic_activity': np.random.uniform(50000, 1000000, data_size)
+    })
+
+    # Economic loss calculation (synthetic relationship)
+    dataset['economic_loss'] = (
+        dataset['severity_index'] * 10000 +
+        dataset['population_affected'] * 1.5 +
+        dataset['infrastructure_damage'] * 50000 +
+        dataset['economic_activity'] * 0.3
+    )
+
+    # One-hot encode categorical variables
+    encoded_data = pd.get_dummies(dataset, columns=['region', 'disaster_type'])
+    X = encoded_data.drop(columns=['economic_loss'])
+    y = encoded_data['economic_loss']
+
+    return X, y
+
+# Step 2: Train the model
+X, y = generate_synthetic_data()
+model = LinearRegression()
+model.fit(X, y)
+
+# Request data model
+class DisasterData(BaseModel):
+    region: str
+    disaster_type: str
+    severity_index: int
+    population_affected: int
+    infrastructure_damage: float
+    economic_activity: float
+
+@app.get("/")
+async def root():
+    return {"message": "AI-Powered Economic Impact Predictor API"}
+
+@app.post("/predict")
+async def predict_impact(data: DisasterData):
+    try:
+        # Encode the input data
+        region_list = ['region_Coastal', 'region_Mountain', 'region_Rural', 'region_Urban']
+        disaster_list = ['disaster_type_Cyclone', 'disaster_type_Drought', 'disaster_type_Earthquake', 'disaster_type_Flood']
+
+        # Initialize input vector with zeros
+        input_vector = np.zeros(len(X.columns))
+
+        # Set numerical inputs
+        input_vector[0] = data.severity_index
+        input_vector[1] = data.population_affected
+        input_vector[2] = data.infrastructure_damage
+        input_vector[3] = data.economic_activity
+
+        # Set categorical inputs
+        if f'region_{data.region}' in region_list:
+            input_vector[4 + region_list.index(f'region_{data.region}')] = 1
+        if f'disaster_type_{data.disaster_type}' in disaster_list:
+            input_vector[4 + len(region_list) + disaster_list.index(f'disaster_type_{data.disaster_type}')] = 1
+
+        # Make prediction
+        estimated_loss = model.predict([input_vector])[0]
+
+        return {
+            "region": data.region,
+            "disaster_type": data.disaster_type,
+            "estimated_economic_loss": round(estimated_loss, 2)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
