@@ -1,0 +1,85 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import joblib
+import random
+
+# Step 1: Simulating Real-Time IoT Data (Disaster Metrics)
+def simulate_iot_data():
+    return {
+        "damage_scale": random.uniform(0.1, 1.0),  # Scale of damage (0.1 to 1.0)
+        "population_affected": random.randint(1000, 100000),  # People affected
+        "infrastructure_loss": random.randint(50000, 1000000),  # Loss in dollars
+        "recovery_time": random.randint(1, 24)  # Estimated recovery time in months
+    }
+
+# Step 2: Data Generation for Training (Historical Data Simulation)
+def generate_training_data(num_samples=1000):
+    data = []
+    for _ in range(num_samples):
+        metrics = simulate_iot_data()
+        economic_loss = (metrics["damage_scale"] * metrics["population_affected"] +
+                         metrics["infrastructure_loss"] / metrics["recovery_time"])
+        data.append([metrics["damage_scale"], metrics["population_affected"],
+                     metrics["infrastructure_loss"], metrics["recovery_time"], economic_loss])
+    columns = ["Damage_Scale", "Population_Affected", "Infrastructure_Loss", "Recovery_Time", "Economic_Loss"]
+    return pd.DataFrame(data, columns=columns)
+
+# Step 3: Train the Prediction Model
+def train_model(data):
+    X = data[["Damage_Scale", "Population_Affected", "Infrastructure_Loss", "Recovery_Time"]]
+    y = data["Economic_Loss"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    # Evaluation
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    print(f"Model Training Complete. Mean Squared Error: {mse:.2f}")
+
+    # Save the model
+    joblib.dump(model, "economic_impact_predictor.pkl")
+
+    # Plotting Actual vs Predicted Economic Loss
+    plt.figure(figsize=(8, 5))
+    plt.scatter(y_test, y_pred, alpha=0.5, color='blue')
+    plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'r--', linewidth=2)
+    plt.xlabel("Actual Economic Loss")
+    plt.ylabel("Predicted Economic Loss")
+    plt.title("Actual vs Predicted Economic Loss")
+    plt.grid(True)
+    plt.show()
+
+# Step 4: Predict Economic Loss Using Real-Time Data
+def predict_economic_loss():
+    model = joblib.load("economic_impact_predictor.pkl")
+    iot_data = simulate_iot_data()
+    features = np.array([[iot_data["damage_scale"], iot_data["population_affected"],
+                          iot_data["infrastructure_loss"], iot_data["recovery_time"]]])
+    prediction = model.predict(features)
+
+    print(f"Predicted Economic Loss: ${prediction[0]:.2f}")
+    print(f"Real-Time Data: {iot_data}")
+
+    # Visualizing the Prediction
+    plt.figure(figsize=(8, 5))
+    categories = ["Damage Scale", "Population Affected", "Infrastructure Loss", "Recovery Time", "Predicted Loss"]
+    values = [iot_data["damage_scale"], iot_data["population_affected"],
+              iot_data["infrastructure_loss"], iot_data["recovery_time"], prediction[0]]
+    plt.bar(categories, values, color='teal')
+    plt.title("Real-Time Economic Loss Prediction")
+    plt.show()
+
+# Step 5: Main Program Execution
+if _name_ == "_main_":
+    print("Generating training data...")
+    training_data = generate_training_data()
+    print("Training the economic impact predictor model...")
+    train_model(training_data)
+    print("Predicting economic loss with real-time data...")
+    predict_economic_loss()
